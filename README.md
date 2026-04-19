@@ -32,18 +32,42 @@
 
 ## 本機環境設定
 
+### 0. 如何打開終端機
+
+所有指令都要在**終端機**裡輸入，不是在 Jupyter 或 VS Code 的程式格裡。
+
+**Mac：**
+- 按 `Command + 空白鍵`，搜尋「終端機」或「Terminal」，按 Enter 開啟
+
+**Windows：**
+- 按 `Windows 鍵`，搜尋「命令提示字元」或「PowerShell」，按 Enter 開啟
+
+> 之後所有 `git`、`pip`、`jupyter` 的指令都在這裡輸入，每行指令輸入完按 **Enter** 執行。
+
+---
+
 ### 1. 安裝必要工具（只做一次）
 
 - [Git](https://git-scm.com/downloads)
 - [VS Code](https://code.visualstudio.com/)
 - [Python 3.10+](https://www.python.org/downloads/)
 
+安裝完後，打開終端機輸入以下指令確認安裝成功：
+```bash
+git --version
+python --version
+```
+看到版本號就代表成功。
+
 ### 2. Clone 專案（只做一次）
 
+打開終端機，輸入：
 ```bash
 git clone https://github.com/brian0908/ntu-lecture-hall-energy.git
 cd ntu-lecture-hall-energy
 ```
+
+> `cd` 是進入資料夾的指令。之後所有指令都要在這個資料夾裡執行。
 
 ### 3. 安裝套件（只做一次）
 
@@ -65,25 +89,51 @@ git config --global user.email "你的GitHub信箱"
 jupyter notebook
 ```
 
+執行後瀏覽器會自動開啟，點選想要的 `.ipynb` 檔案即可。
+如果沒有自動開啟，把終端機裡出現的網址（`http://localhost:8888/...`）複製到瀏覽器貼上。
+
 ---
 
 ## 每次工作的流程
 
-### 開始前：拉取最新版本
+### 第一步：打開終端機，進入專案資料夾
+
+**Mac：**
+```bash
+cd ~/ntu-lecture-hall-energy
+```
+
+**Windows：**
+```bash
+cd C:\Users\你的使用者名稱\ntu-lecture-hall-energy
+```
+
+> 不確定路徑的話：把 Finder（Mac）或檔案總管（Windows）裡的專案資料夾**直接拖進終端機視窗**，路徑會自動填入，再按 Enter。
+
+### 第二步：拉取最新版本
 
 ```bash
 git pull
 ```
 
-### 結束後：上傳修改
+### 第三步：開啟筆記本開始工作
 
-commit 前請先清除筆記本輸出：**Kernel → Restart & Clear Output → 存檔**
+```bash
+jupyter notebook
+```
 
+### 第四步：完成後上傳
+
+先在 Jupyter 清除輸出：**Kernel → Restart & Clear Output → 存檔（Ctrl+S）**
+
+再回到終端機輸入：
 ```bash
 git add .
 git commit -m "簡短說明修改內容，例如：新增溫度與用電散佈圖"
 git push
 ```
+
+第一次 push 會跳出 GitHub 登入視窗，登入自己的帳號即可。
 
 ---
 
