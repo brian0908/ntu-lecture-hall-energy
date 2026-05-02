@@ -4,21 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Context
 
-This is a group project for the course "Data Science for Environment and Energy" at National Taiwan University. The role is an energy data consulting firm pitching energy-saving / net-zero proposals to NTU. The core analysis is quantifying excess AC electricity caused by indoor setpoints below the 26°C government standard, then generalizing from the one metered AC system to the other lecture halls and campus-wide.
+This is a group project for the course "Data Science for Environment and Energy" at National Taiwan University. The role is an energy data consulting firm pitching energy-saving / net-zero proposals to NTU. The core analysis is quantifying excess AC electricity caused by operating below the 26°C government standard, and proposing a governance framework for AC usage — a gap NTU has confirmed it currently lacks.
+
+**Key finding from school consultation:** NTU has no AC *usage* guidelines (no rules on setpoint or operating hours). There are procurement rules (size limits per room area), but nothing governing how AC is actually operated. The government standard is 26°C but NTU has no enforcement mechanism. This policy gap is the central framing of our pitch.
+
+**Methodology anchor:** NTU's 永續辦公室 has already decomposed total electricity into AC and non-AC components for all 145 campus buildings using a temperature-stratified, day-type-aware approach. Their output (`館舍用電基礎值.xlsx`) gives us a defensible, school-endorsed AC load estimate for every building — including all four of our target lecture halls. We use this as the foundation and add a 26°C counterfactual on top.
 
 ## Data
 
-All data lives in `data/`. All meters are **NTU lecture hall buildings** — 普通, 共同, 博雅, and 新生 are all lecture hall complexes on campus.
+### Smart meter data (`data/`)
+
+All meters are NTU lecture hall buildings — 普通, 共同, 博雅, and 新生 are all lecture hall complexes on campus.
 
 | Meter | Description | Files |
 |---|---|---|
-| 普通高壓空調 | AC-only sub-meter for the 普通 lecture hall — **the only direct AC ground truth** | 2016–2020 individual + one combined 2021–2025 file |
+| 普通高壓空調 | AC sub-meter for 普通 lecture hall — used for **setpoint inference and method validation**, not as a decomposition starting point | 2016–2020 individual + one combined 2021–2025 file |
 | 博雅館一 / 博雅館二 | 博雅 lecture hall sub-meters 1 & 2 (total electricity) | 2016–2025 |
 | 博雅三 / 博雅四 | 博雅 lecture hall sub-meters 3 & 4 (total electricity) | 2016–2025 |
 | 共同教室 | 共同 lecture hall total electricity | 2016–2025 |
 | 新生大樓 | 新生 lecture hall total electricity | 2016–2025 |
 
-**Important:** There is no total electricity meter for 普通 — only its AC sub-meter. There is no AC sub-meter for any of the other lecture halls — only their total electricity. This asymmetry shapes the entire analysis strategy.
+Note: The school confirmed that the 普通高壓空調 meter may include non-AC loads because downstream panels are not managed by the Facilities Office. Treat it as an *approximation* of AC load, not a clean ground truth.
 
 **All files share 13 columns:** `日期時間` (hourly timestamp), `功率 kW`, `電表數值` (cumulative meter), `用電度數` (kWh per interval), `功因 %`, `I_r/s/t`, `V_rs/st/tr`, `總視在功率 kVa`, `總無效功率 kVar`.
 
@@ -42,26 +48,40 @@ df = pd.read_excel(filepath, engine='calamine', header=0)
 
 After loading, always cast `datetime` to `pd.to_datetime` and `kw`/`kwh` to `float`.
 
+### 永續辦公室 data (`永續辦公室/`)
+
+| File | Description |
+|---|---|
+| `館舍用電基礎值.xlsx` | Pre-computed electricity decomposition for all 145 NTU buildings. Key column: `人員空調使用用電` (kW) — the AC component extracted by the sustainability office's method. Also contains floor area and per-area density columns. |
+| `08_計算館舍不同日子用電值.py` | The decomposition script. Uses `Dayoff` (0=上課日, 1=上班日, 2=週末, 3=假日), hourly temperature, and 75th-percentile cold/hot stratification to separate AC from base load. |
+
+Key figures for the four target lecture halls from `館舍用電基礎值.xlsx`:
+
+| 館舍 | 面積 (m²) | 人員空調用電 (kW) | 空調用電密度 (kW/m²) |
+|---|---|---|---|
+| 普通教學館 | 8,791 | 117 | 0.01331 |
+| 博雅教學館 | 10,743 | 94 | 0.00875 |
+| 新生教學館 | 5,201 | 113 | 0.02173 |
+| 共同教學館 | 5,461 | 118 | 0.02161 |
+
 ## Analysis Pipeline
 
-The notebook follows this sequence:
-
-1. **Data loading & cleaning** — load all files per meter, concatenate, parse datetimes, remove anomalies (negative kW, meter resets)
-2. **Weather data integration** — join with CWA hourly temperature data for Taipei station; compute `CDH = max(0, T_outdoor − 26)` as the primary cooling-load feature
-3. **EDA** — seasonal heatmaps, load curves by occupancy (semester vs. vacation, weekday vs. weekend), scatter of AC kW vs. outdoor temperature to identify the effective indoor setpoint (inflection point)
-4. **普通 AC model** — train `AC_kWh = f(CDH_actual, CDH_26, humidity, hour, occupancy)` on 普通高壓空調 data; estimate actual setpoint from inflection point (temperature at which AC power starts rising above base); compute 26°C counterfactual excess for 普通
-5. **Decomposition for other halls** — for 共同, 博雅一/二/三/四, 新生: fit base-load model from each building's own winter data (Dec–Feb, T < 18°C), then `AC_inferred = Total − Base_load` for warm months; all are lecture halls so occupancy patterns are comparable
-6. **Cross-validation of decomposition** — verify that the AC_inferred series for the other halls has similar temperature-sensitivity shape (β coefficient) to 普通's actual AC meter; large outliers suggest a building has non-AC sources of temperature-sensitive load
-7. **University-wide extrapolation** — scale by building floor area (from NTU 永續報告書 or facilities data) or by building type; report as a range with explicit uncertainty
-8. **Results** — three-tier table: reference building (meter-validated) → 6 buildings → campus-wide
+1. **Data loading & cleaning** — load all files per meter, concatenate, parse datetimes, remove anomalies (negative kW, meter resets); output `cleaned/*.parquet`
+2. **Weather data integration** — join with CWA hourly temperature data for Taipei station; compute `CDH_actual = max(0, T_outdoor − T_setpoint)` and `CDH_26 = max(0, T_outdoor − 26)`
+3. **EDA + setpoint inference** — seasonal heatmaps, load curves by occupancy; scatter of 普通 AC kW vs outdoor temperature to find the inflection point → estimated current effective setpoint (this is the key input for the counterfactual)
+4. **Adopt sustainability office decomposition** — load `館舍用電基礎值.xlsx`; extract `人員空調使用用電` for the four target halls; reproduce the decomposition logic for transparency
+5. **Cross-validation** — compare the sustainability office's 普通 estimate (117 kW) against the actual 普通高壓空調 meter during comparable hot-afternoon hours; document agreement level and caveat any discrepancy
+6. **26°C counterfactual** — estimate AC savings if setpoint raised to 26°C using CDH ratio scaling: `savings_fraction ≈ 1 − CDH_26 / CDH_actual`; apply to each building's `人員空調使用用電`; report range using low/high setpoint estimates
+7. **Campus-wide scaling** — apply the 26°C correction to all 145 buildings in `館舍用電基礎值.xlsx`; sum to get campus-wide annual excess consumption
+8. **Results & policy recommendations** — kWh/yr saved, cost/yr (台電高壓電價), CO₂/yr (能源局排放係數); propose three policy levers: (a) formal 26°C setpoint standard, (b) time-of-day shutoff rules, (c) sub-metering requirement for buildings without AC meters
 
 ## Key Assumptions to Document
 
-- Actual AC setpoint is inferred from the temperature inflection point in the AC-vs-T scatter, not from thermostat logs
-- COP assumption for the chiller system (typical range 3–4) affects the physics-based model; run sensitivity analysis
-- Base load is fitted from Dec–Feb data where T < 18°C
-- Train/test split: 2016–2021 train, 2022–2024 test (held out for all models)
-- Taiwan grid emission factor: published annually by the Bureau of Energy (電力排放係數, kg CO₂e/kWh); use the year-matched factor for each row
+- Effective AC setpoint is inferred from the inflection point of the 普通 AC kW vs T_outdoor scatter, not from thermostat logs; uncertainty ±1–2°C
+- `人員空調使用用電` from 永續辦公室 represents a typical peak-occupancy hour under hot-weather conditions (75th percentile of hot-afternoon readings); it is a demand figure, not an annual energy total — annualisation requires multiplying by estimated operating hours
+- CDH ratio scaling assumes linear relationship between setpoint and AC energy, which is an approximation; run sensitivity with ±1°C on setpoint
+- Taiwan grid emission factor: use the year-matched annual figure published by the Bureau of Energy (電力排放係數, kg CO₂e/kWh)
+- The school confirmed that 普通高壓空調 may include some non-AC load (panels not managed by Facilities Office); cross-validation in step 5 quantifies this uncertainty
 
 ## Dependencies
 
@@ -70,9 +90,8 @@ pandas
 numpy
 matplotlib / seaborn
 scikit-learn
-xgboost or lightgbm
-shap
 python-calamine   # for 新生大樓 binary XLS files
 beautifulsoup4    # for pd.read_html on HTML-disguised XLS
 html5lib
+openpyxl          # for reading 館舍用電基礎值.xlsx
 ```
