@@ -8,6 +8,12 @@ This is a group project for the course "Data Science for Environment and Energy"
 
 **Key finding from school consultation:** NTU has no AC *usage* guidelines (no rules on setpoint or operating hours). There are procurement rules (size limits per room area), but nothing governing how AC is actually operated. The government standard is 26°C but NTU has no enforcement mechanism. This policy gap is the central framing of our pitch.
 
+**Control room interview findings (added 2026-05-16):**
+- The school does have energy-saving measures, but they are informal and ad hoc — teachers can request adjustments (warmer or cooler), so there is no consistent enforced setpoint.
+- **Seasonal operation:** Winter = ventilation only (no cooling). AC cooling is only active during warm months. For AC analysis, filter to months where cooling is likely (roughly April–October, or where T_outdoor > 24°C).
+- **博雅大階梯教室:** Small classrooms have sealed windows (cannot open) → AC must run regardless. Large lecture halls also require AC. This explains 博雅's relatively high and inelastic AC load.
+- Key qualitative finding: "規範不能預測實際" (rules cannot predict actual behavior) — even informal guidelines are not reliably followed, reinforcing the governance gap argument.
+
 **Methodology anchor:** NTU's 永續辦公室 has already decomposed total electricity into AC and non-AC components for all 145 campus buildings using a temperature-stratified, day-type-aware approach. Their output (`館舍用電基礎值.xlsx`) gives us a defensible, school-endorsed AC load estimate for every building — including all four of our target lecture halls. We use this as the foundation and add a 26°C counterfactual on top.
 
 ## Data
