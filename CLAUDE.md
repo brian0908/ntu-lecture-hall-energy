@@ -65,29 +65,61 @@ Key figures for the four target lecture halls from `館舍用電基礎值.xlsx`:
 
 | 館舍 | 面積 (m²) | 人員空調用電 (kW) | 空調用電密度 (kW/m²) |
 |---|---|---|---|
-| 普通教學館 | 8,791 | 117 | 0.01331 |
+| 普通教學館 | 8,791 | 119 (df_basic 實際值；04 notebook 硬編碼為 117) | 0.01331 |
 | 博雅教學館 | 10,743 | 94 | 0.00875 |
 | 新生教學館 | 5,201 | 113 | 0.02173 |
 | 共同教學館 | 5,461 | 118 | 0.02161 |
 
-## Analysis Pipeline
+## Analysis Pipeline & Notebook Status
 
-1. **Data loading & cleaning** — load all files per meter, concatenate, parse datetimes, remove anomalies (negative kW, meter resets); output `cleaned/*.parquet`
-2. **Weather data integration** — join with CWA hourly temperature data for Taipei station; compute `CDH_actual = max(0, T_outdoor − T_setpoint)` and `CDH_26 = max(0, T_outdoor − 26)`
-3. **EDA + setpoint inference** — seasonal heatmaps, load curves by occupancy; scatter of 普通 AC kW vs outdoor temperature to find the inflection point → estimated current effective setpoint (this is the key input for the counterfactual)
-4. **Adopt sustainability office decomposition** — load `館舍用電基礎值.xlsx`; extract `人員空調使用用電` for the four target halls; reproduce the decomposition logic for transparency
-5. **Setpoint verification** — if actual setpoint data is obtained from 教務處課務組, confirm the 普通 meter's inflection point aligns with it; if not available, use the inflection point as the setpoint estimate with ±1–2°C uncertainty; note that kW magnitude comparison between the meter and the sustainability office figure is not meaningful (sub-circuit vs whole building)
-6. **26°C counterfactual** — estimate AC savings if setpoint raised to 26°C using CDH ratio scaling: `savings_fraction ≈ 1 − CDH_26 / CDH_actual`; apply to each building's `人員空調使用用電`; report range using low/high setpoint estimates
-7. **Campus-wide scaling** — apply the 26°C correction to all 145 buildings in `館舍用電基礎值.xlsx`; sum to get campus-wide annual excess consumption
-8. **Results & policy recommendations** — kWh/yr saved, cost/yr (台電高壓電價), CO₂/yr (能源局排放係數); propose three policy levers: (a) formal 26°C setpoint standard, (b) time-of-day shutoff rules, (c) sub-metering requirement for buildings without AC meters
+### `01_data_loading_cleaning.ipynb` ✅ Complete
+- Loads all meter files (HTML-disguised XLS + binary XLS formats), concatenates, parses datetimes
+- Removes anomalies (negative kW, extreme spikes, meter resets); fills gaps ≤3 hours by interpolation, longer gaps left as NaN
+- Outputs `cleaned_data/*.parquet` for all meters
+- Appended exploratory sections: inter-building kWh correlation (Section 9) and 普通AC share of total 普通 load (Section 10)
+
+### `02_eda.ipynb` ✅ Complete
+- Merges 普通 meters with CWA hourly weather data (Taipei station)
+- Classifies hours into 16 usage-type × day-type categories (4 usage types × 4 day types); computes electricity decomposition into 8 components (館舍基礎/設備待機/人員設備/人員空調)
+- **Setpoint inference (Section 三):** scatter of 普通 AC kW vs outdoor temperature, filtered to weekday class-hours; finds inflection point visually → estimated setpoint ~24°C (full-year aggregate)
+- Additional EDA: heatmaps (month × hour), weekday vs holiday load curves, annual consumption trend 2016–2025
+
+### `03_sustainability_method.ipynb` 🔴 Stub
+- Currently only loads `館舍用電基礎值.xlsx` and prints `df_basic.head()`. No substantive analysis or markdown.
+- Intended purpose (unexplained decomposition logic, cross-validation with smart meter data) is not yet written.
+
+### `04_counterfactual.ipynb` ✅ Complete (single-setpoint baseline)
+- Single annual setpoint T_set = 24°C (from 02 inflection point)
+- Defines AC operating hours: weekdays × 08–22h × April–October × T_outdoor > 24°C → avg **1,222 hr/yr**
+- CDH ratio: `savings_fraction = 1 − CDH_26 / CDH_24 = 36.0%` over 2016–2025
+- Applies to four target halls via sustainability office figures → annualised savings per hall
+- Scales to all 145 buildings: **3.58 GWh/yr saved, 1,252 萬元/yr, 1,767 公噸 CO₂/yr**
+- Sensitivity: T_set 23°C → 47% savings; T_set 25°C → 21% savings
+- **Note:** Section 九 result summary table contains placeholder `—` values not yet filled in.
+
+### `05_seasonal_ac_temperature_savings.ipynb` ✅ Complete (seasonal, preferred method)
+- Extends 04 by inferring a **separate setpoint per semester** using two-segment piecewise linear regression (minimises RSS over candidate breakpoints):
+  - 下學期 (Feb–Jun): **T_set = 24.0°C** — meaningful savings vs 26°C
+  - 上學期 (Sep–Dec): **T_set = 26.1°C** — already at/above standard, near-zero savings
+  - 暑假 (Jul–Aug):   **T_set = 29.6°C** — almost no cooling demand, negligible savings
+- Quantifies two policy interventions separately:
+  1. **Raise setpoint to 26°C** (temperature policy)
+  2. **Delay AC start to 09:00** (operating-hours policy, currently assumed 08:00)
+- Four-hall annual results: **~152,000 kWh/yr** from 26°C measure
+- Campus-wide (145 buildings): **2.48 GWh/yr** (26°C) + **0.58 GWh/yr** (delay) = **3.06 GWh/yr combined**; 8.7 百萬元/yr from 26°C alone
+- Exports `cleaned_data/seasonal_ac_savings.xlsx`
+- **Known issue:** campus CO₂ output in Section 七 prints "1 公噸" — unit conversion bug, needs fix.
+
+### Relationship between 04 and 05
+04 uses a single annual setpoint (24°C) and overestimates savings for the upper semester (where T_set ≈ 26°C already). 05 is more accurate because it accounts for seasonal variation. **Use 05 as the primary result for the pitch; 04 is a useful sensitivity benchmark.**
 
 ## Key Assumptions to Document
 
-- Effective AC setpoint is inferred from the inflection point of the 普通 AC kW vs T_outdoor scatter, not from thermostat logs; uncertainty ±1–2°C
-- `人員空調使用用電` from 永續辦公室 represents a typical peak-occupancy hour under hot-weather conditions (75th percentile of hot-afternoon readings); it is a demand figure, not an annual energy total — annualisation requires multiplying by estimated operating hours
-- CDH ratio scaling assumes linear relationship between setpoint and AC energy, which is an approximation; run sensitivity with ±1°C on setpoint
-- Taiwan grid emission factor: use the year-matched annual figure published by the Bureau of Energy (電力排放係數, kg CO₂e/kWh)
-- The 普通高壓空調 meter reads 10–70 kW (one sub-circuit); the sustainability office's 117 kW figure is the whole building’s AC load — these cannot be directly compared; the meter is used only for inflection-point-based setpoint inference, not magnitude validation
+- Effective AC setpoint is inferred from piecewise linear regression of 普通 AC kW vs T_outdoor (weekdays, class hours only), not from thermostat logs; uncertainty ±1–2°C. Seasonal decomposition in 05 reveals the full-year aggregate (24°C) masks near-26°C behaviour in the fall semester.
+- `人員空調使用用電` from 永續辦公室 is a demand figure (kW at hot-afternoon peak), not an annual total — annualisation multiplies by estimated AC operating hours per year
+- CDH ratio scaling assumes linear AC energy response to setpoint; validated with ±1°C sensitivity
+- Taiwan grid emission factor: 0.494 kg CO₂e/kWh (Bureau of Energy 2023); use year-matched figure for final reporting
+- The 普通高壓空調 meter (10–70 kW) is one sub-circuit; the sustainability office’s figure for 普通教學館 (119 kW per df_basic, 117 kW as hard-coded in 04) covers the whole building — not comparable in magnitude; meter used only for setpoint inference
 
 ## Dependencies
 
