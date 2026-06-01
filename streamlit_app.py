@@ -121,7 +121,7 @@ def load_all():
     weather.index = weather.index.tz_localize(None)
     temp = weather["Temperature"].where(lambda x: x > -9).rename("T")
 
-    df_basic = pd.read_excel(SUS / "館舍用電基礎值.xlsx")
+    df_basic = pd.read_parquet(SUS / "館舍用電基礎值.parquet")
 
     buildings_kw = {
         "普通教學館": sum_meters(df_ac, df_putong1, df_putong2, df_elevator),
