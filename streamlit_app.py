@@ -481,10 +481,15 @@ with tab_savings:
     st.plotly_chart(fig_savings_bar(df_sav), use_container_width=True)
 
     # Totals
-    c1, c2, c3 = st.columns(3)
+    total_co2 = df_sav["年減碳 (公噸 CO₂)"].sum()
+    # 1 tree absorbs ~18 kg CO₂/yr (台灣林務局 平均值)
+    trees = int(total_co2 * 1000 / 18)
+
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("六棟合計年節電量", f"{df_sav['年節電量 (MWh)'].sum():.1f} MWh")
     c2.metric("六棟合計年節費",   f"{df_sav['年節費 (萬元)'].sum():.1f} 萬元")
-    c3.metric("六棟合計年減碳",   f"{df_sav['年減碳 (公噸 CO₂)'].sum():.1f} 公噸 CO₂")
+    c3.metric("六棟合計年減碳",   f"{total_co2:.1f} 公噸 CO₂")
+    c4.metric("相當於種樹", f"{trees:,} 棵", "每棵樹每年吸收約 18 kg CO₂")
 
     st.subheader("各棟節電效益明細")
     display_df = df_sav.copy()
