@@ -17,7 +17,6 @@ warnings.filterwarnings("ignore")
 
 st.set_page_config(
     page_title="臺大空調節電儀表板",
-    page_icon="🏫",
     layout="wide",
 )
 
@@ -422,7 +421,7 @@ def fig_savings_bar(df_sav: pd.DataFrame):
 # PAGE LAYOUT
 # ════════════════════════════════════════════════════════════════════
 
-st.title("🏫 臺大空調用電減排效益分析儀表板")
+st.title("臺大空調用電減排效益分析儀表板")
 st.caption("114-2 環境與能源的資料科學 · 第三組　邱雲茗、李適軒、楊思柔、呂沐田、李怡慧、黃宗軒")
 st.divider()
 
