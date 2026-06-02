@@ -14,7 +14,8 @@
       "Bash(git commit -m 'fix: remove version pins from requirements to fix openpyxl install on Python 3.14 *)",
       "Bash(git pull *)",
       "Bash(python3 -c ' *)",
-      "Bash(git commit -m 'fix: pre-convert xlsx to parquet to drop openpyxl \\(unsupported on Python 3.14\\) *)"
+      "Bash(git commit -m 'fix: pre-convert xlsx to parquet to drop openpyxl \\(unsupported on Python 3.14\\) *)",
+      "Bash(git commit -m 'feat: add tree-equivalent metric for total CO2 savings *)"
     ]
   }
 }
